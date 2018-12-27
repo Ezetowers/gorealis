@@ -13179,21 +13179,26 @@ func (p *JobUpdateRequest) String() string {
 //  - Limit: Number or records to serve. Used by pagination.
 type JobUpdateQuery struct {
 	// unused field # 1
-	Role           string                   `thrift:"role,2" json:"role"`
-	JobKey         *JobKey                  `thrift:"jobKey,3" json:"jobKey"`
-	User           string                   `thrift:"user,4" json:"user"`
-	UpdateStatuses map[JobUpdateStatus]bool `thrift:"updateStatuses,5" json:"updateStatuses"`
-	Offset         int32                    `thrift:"offset,6" json:"offset"`
+	Role           *string                  `thrift:"role,2" json:"role,omitempty"`
+	JobKey         *JobKey                  `thrift:"jobKey,3" json:"jobKey,omitempty"`
+	User           *string                  `thrift:"user,4" json:"user,omitempty"`
+	UpdateStatuses map[JobUpdateStatus]bool `thrift:"updateStatuses,5" json:"updateStatuses,omitempty"`
+	Offset         *int32                   `thrift:"offset,6" json:"offset,omitempty"`
 	Limit          int32                    `thrift:"limit,7" json:"limit"`
-	Key            *JobUpdateKey            `thrift:"key,8" json:"key"`
+	Key            *JobUpdateKey            `thrift:"key,8" json:"key,omitempty"`
 }
 
 func NewJobUpdateQuery() *JobUpdateQuery {
 	return &JobUpdateQuery{}
 }
 
+var JobUpdateQuery_Role_DEFAULT string
+
 func (p *JobUpdateQuery) GetRole() string {
-	return p.Role
+	if !p.IsSetRole() {
+		return JobUpdateQuery_Role_DEFAULT
+	}
+	return *p.Role
 }
 
 var JobUpdateQuery_Key_DEFAULT *JobUpdateKey
@@ -13214,27 +13219,55 @@ func (p *JobUpdateQuery) GetJobKey() *JobKey {
 	return p.JobKey
 }
 
+var JobUpdateQuery_User_DEFAULT string
+
 func (p *JobUpdateQuery) GetUser() string {
-	return p.User
+	if !p.IsSetUser() {
+		return JobUpdateQuery_User_DEFAULT
+	}
+	return *p.User
 }
+
+var JobUpdateQuery_UpdateStatuses_DEFAULT map[JobUpdateStatus]bool
 
 func (p *JobUpdateQuery) GetUpdateStatuses() map[JobUpdateStatus]bool {
 	return p.UpdateStatuses
 }
 
+var JobUpdateQuery_Offset_DEFAULT int32
+
 func (p *JobUpdateQuery) GetOffset() int32 {
-	return p.Offset
+	if !p.IsSetOffset() {
+		return JobUpdateQuery_Offset_DEFAULT
+	}
+	return *p.Offset
 }
 
 func (p *JobUpdateQuery) GetLimit() int32 {
 	return p.Limit
 }
+func (p *JobUpdateQuery) IsSetRole() bool {
+	return p.Role != nil
+}
+
 func (p *JobUpdateQuery) IsSetKey() bool {
 	return p.Key != nil
 }
 
 func (p *JobUpdateQuery) IsSetJobKey() bool {
 	return p.JobKey != nil
+}
+
+func (p *JobUpdateQuery) IsSetUser() bool {
+	return p.User != nil
+}
+
+func (p *JobUpdateQuery) IsSetUpdateStatuses() bool {
+	return p.UpdateStatuses != nil
+}
+
+func (p *JobUpdateQuery) IsSetOffset() bool {
+	return p.Offset != nil
 }
 
 func (p *JobUpdateQuery) Read(iprot thrift.TProtocol) error {
@@ -13298,7 +13331,7 @@ func (p *JobUpdateQuery) readField2(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 2: ", err)
 	} else {
-		p.Role = v
+		p.Role = &v
 	}
 	return nil
 }
@@ -13323,7 +13356,7 @@ func (p *JobUpdateQuery) readField4(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadString(); err != nil {
 		return thrift.PrependError("error reading field 4: ", err)
 	} else {
-		p.User = v
+		p.User = &v
 	}
 	return nil
 }
@@ -13355,7 +13388,7 @@ func (p *JobUpdateQuery) readField6(iprot thrift.TProtocol) error {
 	if v, err := iprot.ReadI32(); err != nil {
 		return thrift.PrependError("error reading field 6: ", err)
 	} else {
-		p.Offset = v
+		p.Offset = &v
 	}
 	return nil
 }
@@ -13404,74 +13437,84 @@ func (p *JobUpdateQuery) Write(oprot thrift.TProtocol) error {
 }
 
 func (p *JobUpdateQuery) writeField2(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("role", thrift.STRING, 2); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:role: ", p), err)
-	}
-	if err := oprot.WriteString(string(p.Role)); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T.role (2) field write error: ", p), err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 2:role: ", p), err)
+	if p.IsSetRole() {
+		if err := oprot.WriteFieldBegin("role", thrift.STRING, 2); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 2:role: ", p), err)
+		}
+		if err := oprot.WriteString(string(*p.Role)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T.role (2) field write error: ", p), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 2:role: ", p), err)
+		}
 	}
 	return err
 }
 
 func (p *JobUpdateQuery) writeField3(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("jobKey", thrift.STRUCT, 3); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:jobKey: ", p), err)
-	}
-	if err := p.JobKey.Write(oprot); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.JobKey), err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 3:jobKey: ", p), err)
+	if p.IsSetJobKey() {
+		if err := oprot.WriteFieldBegin("jobKey", thrift.STRUCT, 3); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 3:jobKey: ", p), err)
+		}
+		if err := p.JobKey.Write(oprot); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.JobKey), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 3:jobKey: ", p), err)
+		}
 	}
 	return err
 }
 
 func (p *JobUpdateQuery) writeField4(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("user", thrift.STRING, 4); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:user: ", p), err)
-	}
-	if err := oprot.WriteString(string(p.User)); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T.user (4) field write error: ", p), err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 4:user: ", p), err)
+	if p.IsSetUser() {
+		if err := oprot.WriteFieldBegin("user", thrift.STRING, 4); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 4:user: ", p), err)
+		}
+		if err := oprot.WriteString(string(*p.User)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T.user (4) field write error: ", p), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 4:user: ", p), err)
+		}
 	}
 	return err
 }
 
 func (p *JobUpdateQuery) writeField5(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("updateStatuses", thrift.SET, 5); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 5:updateStatuses: ", p), err)
-	}
-	if err := oprot.WriteSetBegin(thrift.I32, len(p.UpdateStatuses)); err != nil {
-		return thrift.PrependError("error writing set begin: ", err)
-	}
-	for v, _ := range p.UpdateStatuses {
-		if err := oprot.WriteI32(int32(v)); err != nil {
-			return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+	if p.IsSetUpdateStatuses() {
+		if err := oprot.WriteFieldBegin("updateStatuses", thrift.SET, 5); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 5:updateStatuses: ", p), err)
 		}
-	}
-	if err := oprot.WriteSetEnd(); err != nil {
-		return thrift.PrependError("error writing set end: ", err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 5:updateStatuses: ", p), err)
+		if err := oprot.WriteSetBegin(thrift.I32, len(p.UpdateStatuses)); err != nil {
+			return thrift.PrependError("error writing set begin: ", err)
+		}
+		for v, _ := range p.UpdateStatuses {
+			if err := oprot.WriteI32(int32(v)); err != nil {
+				return thrift.PrependError(fmt.Sprintf("%T. (0) field write error: ", p), err)
+			}
+		}
+		if err := oprot.WriteSetEnd(); err != nil {
+			return thrift.PrependError("error writing set end: ", err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 5:updateStatuses: ", p), err)
+		}
 	}
 	return err
 }
 
 func (p *JobUpdateQuery) writeField6(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("offset", thrift.I32, 6); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 6:offset: ", p), err)
-	}
-	if err := oprot.WriteI32(int32(p.Offset)); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T.offset (6) field write error: ", p), err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 6:offset: ", p), err)
+	if p.IsSetOffset() {
+		if err := oprot.WriteFieldBegin("offset", thrift.I32, 6); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 6:offset: ", p), err)
+		}
+		if err := oprot.WriteI32(int32(*p.Offset)); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T.offset (6) field write error: ", p), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 6:offset: ", p), err)
+		}
 	}
 	return err
 }
@@ -13490,14 +13533,16 @@ func (p *JobUpdateQuery) writeField7(oprot thrift.TProtocol) (err error) {
 }
 
 func (p *JobUpdateQuery) writeField8(oprot thrift.TProtocol) (err error) {
-	if err := oprot.WriteFieldBegin("key", thrift.STRUCT, 8); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field begin error 8:key: ", p), err)
-	}
-	if err := p.Key.Write(oprot); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.Key), err)
-	}
-	if err := oprot.WriteFieldEnd(); err != nil {
-		return thrift.PrependError(fmt.Sprintf("%T write field end error 8:key: ", p), err)
+	if p.IsSetKey() {
+		if err := oprot.WriteFieldBegin("key", thrift.STRUCT, 8); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field begin error 8:key: ", p), err)
+		}
+		if err := p.Key.Write(oprot); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T error writing struct: ", p.Key), err)
+		}
+		if err := oprot.WriteFieldEnd(); err != nil {
+			return thrift.PrependError(fmt.Sprintf("%T write field end error 8:key: ", p), err)
+		}
 	}
 	return err
 }
