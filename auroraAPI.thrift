@@ -379,8 +379,6 @@ struct TaskConfig {
  27: optional set<Metadata> metadata
  /** Policy for how to deal with task partitions */
  34: optional PartitionPolicy partitionPolicy
- /** Instances with variables to Interpolate in the TaskConfig */
- 31: optional list<Instance> instances
  /** SLA requirements to be met during maintenance */
  35: optional SlaPolicy slaPolicy
 
@@ -965,7 +963,7 @@ struct JobUpdateQuery {
   5: optional set<JobUpdateStatus> updateStatuses
 
   /** Offset to serve data from. Used by pagination. */
-  6: optional i32 offset
+  6: i32 offset
 
   /** Number or records to serve. Used by pagination. */
   7: i32 limit
