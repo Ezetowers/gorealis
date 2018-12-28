@@ -955,12 +955,15 @@ func (r *realisClient) FetchTaskConfig(instKey aurora.InstanceKey) (*aurora.Task
 	return tasks[0].AssignedTask.Task, nil
 }
 
+// want (*aurora.JobUpdateKey, *aurora.JobUpdateQuery)
+
 func (r *realisClient) JobUpdateDetails(updateQuery aurora.JobUpdateQuery) (*aurora.Response, error) {
 
 	r.logger.DebugPrintf("GetJobUpdateDetails Thrift Payload: %+v\n", updateQuery)
 
 	resp, retryErr := r.thriftCallWithRetries(func() (*aurora.Response, error) {
-		return r.client.GetJobUpdateDetails(&updateQuery)
+		// ATR!!!
+		return r.client.GetJobUpdateDetails(nil, &updateQuery)
 	})
 
 	if retryErr != nil {
