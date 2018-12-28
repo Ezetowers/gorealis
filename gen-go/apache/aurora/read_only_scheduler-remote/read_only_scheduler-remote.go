@@ -4,408 +4,407 @@
 package main
 
 import (
-        "context"
-        "flag"
-        "fmt"
-        "math"
-        "net"
-        "net/url"
-        "os"
-        "strconv"
-        "strings"
-        "github.com/apache/thrift/lib/go/thrift"
-        "apache/aurora"
+	"apache/aurora"
+	"context"
+	"flag"
+	"fmt"
+	"git.apache.org/thrift.git/lib/go/thrift"
+	"math"
+	"net"
+	"net/url"
+	"os"
+	"strconv"
+	"strings"
 )
 
-
 func Usage() {
-  fmt.Fprintln(os.Stderr, "Usage of ", os.Args[0], " [-h host:port] [-u url] [-f[ramed]] function [arg1 [arg2...]]:")
-  flag.PrintDefaults()
-  fmt.Fprintln(os.Stderr, "\nFunctions:")
-  fmt.Fprintln(os.Stderr, "  Response getRoleSummary()")
-  fmt.Fprintln(os.Stderr, "  Response getJobSummary(string role)")
-  fmt.Fprintln(os.Stderr, "  Response getTasksStatus(TaskQuery query)")
-  fmt.Fprintln(os.Stderr, "  Response getTasksWithoutConfigs(TaskQuery query)")
-  fmt.Fprintln(os.Stderr, "  Response getPendingReason(TaskQuery query)")
-  fmt.Fprintln(os.Stderr, "  Response getConfigSummary(JobKey job)")
-  fmt.Fprintln(os.Stderr, "  Response getJobs(string ownerRole)")
-  fmt.Fprintln(os.Stderr, "  Response getQuota(string ownerRole)")
-  fmt.Fprintln(os.Stderr, "  Response populateJobConfig(JobConfiguration description)")
-  fmt.Fprintln(os.Stderr, "  Response getJobUpdateSummaries(JobUpdateQuery jobUpdateQuery)")
-  fmt.Fprintln(os.Stderr, "  Response getJobUpdateDetails(JobUpdateQuery query)")
-  fmt.Fprintln(os.Stderr, "  Response getJobUpdateDiff(JobUpdateRequest request)")
-  fmt.Fprintln(os.Stderr, "  Response getTierConfigs()")
-  fmt.Fprintln(os.Stderr)
-  os.Exit(0)
+	fmt.Fprintln(os.Stderr, "Usage of ", os.Args[0], " [-h host:port] [-u url] [-f[ramed]] function [arg1 [arg2...]]:")
+	flag.PrintDefaults()
+	fmt.Fprintln(os.Stderr, "\nFunctions:")
+	fmt.Fprintln(os.Stderr, "  Response getRoleSummary()")
+	fmt.Fprintln(os.Stderr, "  Response getJobSummary(string role)")
+	fmt.Fprintln(os.Stderr, "  Response getTasksStatus(TaskQuery query)")
+	fmt.Fprintln(os.Stderr, "  Response getTasksWithoutConfigs(TaskQuery query)")
+	fmt.Fprintln(os.Stderr, "  Response getPendingReason(TaskQuery query)")
+	fmt.Fprintln(os.Stderr, "  Response getConfigSummary(JobKey job)")
+	fmt.Fprintln(os.Stderr, "  Response getJobs(string ownerRole)")
+	fmt.Fprintln(os.Stderr, "  Response getQuota(string ownerRole)")
+	fmt.Fprintln(os.Stderr, "  Response populateJobConfig(JobConfiguration description)")
+	fmt.Fprintln(os.Stderr, "  Response getJobUpdateSummaries(JobUpdateQuery jobUpdateQuery)")
+	fmt.Fprintln(os.Stderr, "  Response getJobUpdateDetails(JobUpdateQuery query)")
+	fmt.Fprintln(os.Stderr, "  Response getJobUpdateDiff(JobUpdateRequest request)")
+	fmt.Fprintln(os.Stderr, "  Response getTierConfigs()")
+	fmt.Fprintln(os.Stderr)
+	os.Exit(0)
 }
 
 type httpHeaders map[string]string
 
 func (h httpHeaders) String() string {
-  var m map[string]string = h
-  return fmt.Sprintf("%s", m)
+	var m map[string]string = h
+	return fmt.Sprintf("%s", m)
 }
 
 func (h httpHeaders) Set(value string) error {
-  parts := strings.Split(value, ": ")
-  if len(parts) != 2 {
-    return fmt.Errorf("header should be of format 'Key: Value'")
-  }
-  h[parts[0]] = parts[1]
-  return nil
+	parts := strings.Split(value, ": ")
+	if len(parts) != 2 {
+		return fmt.Errorf("header should be of format 'Key: Value'")
+	}
+	h[parts[0]] = parts[1]
+	return nil
 }
 
 func main() {
-  flag.Usage = Usage
-  var host string
-  var port int
-  var protocol string
-  var urlString string
-  var framed bool
-  var useHttp bool
-  headers := make(httpHeaders)
-  var parsedUrl *url.URL
-  var trans thrift.TTransport
-  _ = strconv.Atoi
-  _ = math.Abs
-  flag.Usage = Usage
-  flag.StringVar(&host, "h", "localhost", "Specify host and port")
-  flag.IntVar(&port, "p", 9090, "Specify port")
-  flag.StringVar(&protocol, "P", "binary", "Specify the protocol (binary, compact, simplejson, json)")
-  flag.StringVar(&urlString, "u", "", "Specify the url")
-  flag.BoolVar(&framed, "framed", false, "Use framed transport")
-  flag.BoolVar(&useHttp, "http", false, "Use http")
-  flag.Var(headers, "H", "Headers to set on the http(s) request (e.g. -H \"Key: Value\")")
-  flag.Parse()
-  
-  if len(urlString) > 0 {
-    var err error
-    parsedUrl, err = url.Parse(urlString)
-    if err != nil {
-      fmt.Fprintln(os.Stderr, "Error parsing URL: ", err)
-      flag.Usage()
-    }
-    host = parsedUrl.Host
-    useHttp = len(parsedUrl.Scheme) <= 0 || parsedUrl.Scheme == "http" || parsedUrl.Scheme == "https"
-  } else if useHttp {
-    _, err := url.Parse(fmt.Sprint("http://", host, ":", port))
-    if err != nil {
-      fmt.Fprintln(os.Stderr, "Error parsing URL: ", err)
-      flag.Usage()
-    }
-  }
-  
-  cmd := flag.Arg(0)
-  var err error
-  if useHttp {
-    trans, err = thrift.NewTHttpClient(parsedUrl.String())
-    if len(headers) > 0 {
-      httptrans := trans.(*thrift.THttpClient)
-      for key, value := range headers {
-        httptrans.SetHeader(key, value)
-      }
-    }
-  } else {
-    portStr := fmt.Sprint(port)
-    if strings.Contains(host, ":") {
-           host, portStr, err = net.SplitHostPort(host)
-           if err != nil {
-                   fmt.Fprintln(os.Stderr, "error with host:", err)
-                   os.Exit(1)
-           }
-    }
-    trans, err = thrift.NewTSocket(net.JoinHostPort(host, portStr))
-    if err != nil {
-      fmt.Fprintln(os.Stderr, "error resolving address:", err)
-      os.Exit(1)
-    }
-    if framed {
-      trans = thrift.NewTFramedTransport(trans)
-    }
-  }
-  if err != nil {
-    fmt.Fprintln(os.Stderr, "Error creating transport", err)
-    os.Exit(1)
-  }
-  defer trans.Close()
-  var protocolFactory thrift.TProtocolFactory
-  switch protocol {
-  case "compact":
-    protocolFactory = thrift.NewTCompactProtocolFactory()
-    break
-  case "simplejson":
-    protocolFactory = thrift.NewTSimpleJSONProtocolFactory()
-    break
-  case "json":
-    protocolFactory = thrift.NewTJSONProtocolFactory()
-    break
-  case "binary", "":
-    protocolFactory = thrift.NewTBinaryProtocolFactoryDefault()
-    break
-  default:
-    fmt.Fprintln(os.Stderr, "Invalid protocol specified: ", protocol)
-    Usage()
-    os.Exit(1)
-  }
-  iprot := protocolFactory.GetProtocol(trans)
-  oprot := protocolFactory.GetProtocol(trans)
-  client := aurora.NewReadOnlySchedulerClient(thrift.NewTStandardClient(iprot, oprot))
-  if err := trans.Open(); err != nil {
-    fmt.Fprintln(os.Stderr, "Error opening socket to ", host, ":", port, " ", err)
-    os.Exit(1)
-  }
-  
-  switch cmd {
-  case "getRoleSummary":
-    if flag.NArg() - 1 != 0 {
-      fmt.Fprintln(os.Stderr, "GetRoleSummary requires 0 args")
-      flag.Usage()
-    }
-    fmt.Print(client.GetRoleSummary(context.Background()))
-    fmt.Print("\n")
-    break
-  case "getJobSummary":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetJobSummary requires 1 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    fmt.Print(client.GetJobSummary(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getTasksStatus":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetTasksStatus requires 1 args")
-      flag.Usage()
-    }
-    arg82 := flag.Arg(1)
-    mbTrans83 := thrift.NewTMemoryBufferLen(len(arg82))
-    defer mbTrans83.Close()
-    _, err84 := mbTrans83.WriteString(arg82)
-    if err84 != nil {
-      Usage()
-      return
-    }
-    factory85 := thrift.NewTJSONProtocolFactory()
-    jsProt86 := factory85.GetProtocol(mbTrans83)
-    argvalue0 := aurora.NewTaskQuery()
-    err87 := argvalue0.Read(jsProt86)
-    if err87 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetTasksStatus(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getTasksWithoutConfigs":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetTasksWithoutConfigs requires 1 args")
-      flag.Usage()
-    }
-    arg88 := flag.Arg(1)
-    mbTrans89 := thrift.NewTMemoryBufferLen(len(arg88))
-    defer mbTrans89.Close()
-    _, err90 := mbTrans89.WriteString(arg88)
-    if err90 != nil {
-      Usage()
-      return
-    }
-    factory91 := thrift.NewTJSONProtocolFactory()
-    jsProt92 := factory91.GetProtocol(mbTrans89)
-    argvalue0 := aurora.NewTaskQuery()
-    err93 := argvalue0.Read(jsProt92)
-    if err93 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetTasksWithoutConfigs(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getPendingReason":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetPendingReason requires 1 args")
-      flag.Usage()
-    }
-    arg94 := flag.Arg(1)
-    mbTrans95 := thrift.NewTMemoryBufferLen(len(arg94))
-    defer mbTrans95.Close()
-    _, err96 := mbTrans95.WriteString(arg94)
-    if err96 != nil {
-      Usage()
-      return
-    }
-    factory97 := thrift.NewTJSONProtocolFactory()
-    jsProt98 := factory97.GetProtocol(mbTrans95)
-    argvalue0 := aurora.NewTaskQuery()
-    err99 := argvalue0.Read(jsProt98)
-    if err99 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetPendingReason(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getConfigSummary":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetConfigSummary requires 1 args")
-      flag.Usage()
-    }
-    arg100 := flag.Arg(1)
-    mbTrans101 := thrift.NewTMemoryBufferLen(len(arg100))
-    defer mbTrans101.Close()
-    _, err102 := mbTrans101.WriteString(arg100)
-    if err102 != nil {
-      Usage()
-      return
-    }
-    factory103 := thrift.NewTJSONProtocolFactory()
-    jsProt104 := factory103.GetProtocol(mbTrans101)
-    argvalue0 := aurora.NewJobKey()
-    err105 := argvalue0.Read(jsProt104)
-    if err105 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetConfigSummary(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getJobs":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetJobs requires 1 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    fmt.Print(client.GetJobs(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getQuota":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetQuota requires 1 args")
-      flag.Usage()
-    }
-    argvalue0 := flag.Arg(1)
-    value0 := argvalue0
-    fmt.Print(client.GetQuota(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "populateJobConfig":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "PopulateJobConfig requires 1 args")
-      flag.Usage()
-    }
-    arg108 := flag.Arg(1)
-    mbTrans109 := thrift.NewTMemoryBufferLen(len(arg108))
-    defer mbTrans109.Close()
-    _, err110 := mbTrans109.WriteString(arg108)
-    if err110 != nil {
-      Usage()
-      return
-    }
-    factory111 := thrift.NewTJSONProtocolFactory()
-    jsProt112 := factory111.GetProtocol(mbTrans109)
-    argvalue0 := aurora.NewJobConfiguration()
-    err113 := argvalue0.Read(jsProt112)
-    if err113 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.PopulateJobConfig(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getJobUpdateSummaries":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetJobUpdateSummaries requires 1 args")
-      flag.Usage()
-    }
-    arg114 := flag.Arg(1)
-    mbTrans115 := thrift.NewTMemoryBufferLen(len(arg114))
-    defer mbTrans115.Close()
-    _, err116 := mbTrans115.WriteString(arg114)
-    if err116 != nil {
-      Usage()
-      return
-    }
-    factory117 := thrift.NewTJSONProtocolFactory()
-    jsProt118 := factory117.GetProtocol(mbTrans115)
-    argvalue0 := aurora.NewJobUpdateQuery()
-    err119 := argvalue0.Read(jsProt118)
-    if err119 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetJobUpdateSummaries(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getJobUpdateDetails":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetJobUpdateDetails requires 1 args")
-      flag.Usage()
-    }
-    arg120 := flag.Arg(1)
-    mbTrans121 := thrift.NewTMemoryBufferLen(len(arg120))
-    defer mbTrans121.Close()
-    _, err122 := mbTrans121.WriteString(arg120)
-    if err122 != nil {
-      Usage()
-      return
-    }
-    factory123 := thrift.NewTJSONProtocolFactory()
-    jsProt124 := factory123.GetProtocol(mbTrans121)
-    argvalue0 := aurora.NewJobUpdateQuery()
-    err125 := argvalue0.Read(jsProt124)
-    if err125 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetJobUpdateDetails(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getJobUpdateDiff":
-    if flag.NArg() - 1 != 1 {
-      fmt.Fprintln(os.Stderr, "GetJobUpdateDiff requires 1 args")
-      flag.Usage()
-    }
-    arg126 := flag.Arg(1)
-    mbTrans127 := thrift.NewTMemoryBufferLen(len(arg126))
-    defer mbTrans127.Close()
-    _, err128 := mbTrans127.WriteString(arg126)
-    if err128 != nil {
-      Usage()
-      return
-    }
-    factory129 := thrift.NewTJSONProtocolFactory()
-    jsProt130 := factory129.GetProtocol(mbTrans127)
-    argvalue0 := aurora.NewJobUpdateRequest()
-    err131 := argvalue0.Read(jsProt130)
-    if err131 != nil {
-      Usage()
-      return
-    }
-    value0 := argvalue0
-    fmt.Print(client.GetJobUpdateDiff(context.Background(), value0))
-    fmt.Print("\n")
-    break
-  case "getTierConfigs":
-    if flag.NArg() - 1 != 0 {
-      fmt.Fprintln(os.Stderr, "GetTierConfigs requires 0 args")
-      flag.Usage()
-    }
-    fmt.Print(client.GetTierConfigs(context.Background()))
-    fmt.Print("\n")
-    break
-  case "":
-    Usage()
-    break
-  default:
-    fmt.Fprintln(os.Stderr, "Invalid function ", cmd)
-  }
+	flag.Usage = Usage
+	var host string
+	var port int
+	var protocol string
+	var urlString string
+	var framed bool
+	var useHttp bool
+	headers := make(httpHeaders)
+	var parsedUrl *url.URL
+	var trans thrift.TTransport
+	_ = strconv.Atoi
+	_ = math.Abs
+	flag.Usage = Usage
+	flag.StringVar(&host, "h", "localhost", "Specify host and port")
+	flag.IntVar(&port, "p", 9090, "Specify port")
+	flag.StringVar(&protocol, "P", "binary", "Specify the protocol (binary, compact, simplejson, json)")
+	flag.StringVar(&urlString, "u", "", "Specify the url")
+	flag.BoolVar(&framed, "framed", false, "Use framed transport")
+	flag.BoolVar(&useHttp, "http", false, "Use http")
+	flag.Var(headers, "H", "Headers to set on the http(s) request (e.g. -H \"Key: Value\")")
+	flag.Parse()
+
+	if len(urlString) > 0 {
+		var err error
+		parsedUrl, err = url.Parse(urlString)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error parsing URL: ", err)
+			flag.Usage()
+		}
+		host = parsedUrl.Host
+		useHttp = len(parsedUrl.Scheme) <= 0 || parsedUrl.Scheme == "http" || parsedUrl.Scheme == "https"
+	} else if useHttp {
+		_, err := url.Parse(fmt.Sprint("http://", host, ":", port))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error parsing URL: ", err)
+			flag.Usage()
+		}
+	}
+
+	cmd := flag.Arg(0)
+	var err error
+	if useHttp {
+		trans, err = thrift.NewTHttpClient(parsedUrl.String())
+		if len(headers) > 0 {
+			httptrans := trans.(*thrift.THttpClient)
+			for key, value := range headers {
+				httptrans.SetHeader(key, value)
+			}
+		}
+	} else {
+		portStr := fmt.Sprint(port)
+		if strings.Contains(host, ":") {
+			host, portStr, err = net.SplitHostPort(host)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, "error with host:", err)
+				os.Exit(1)
+			}
+		}
+		trans, err = thrift.NewTSocket(net.JoinHostPort(host, portStr))
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error resolving address:", err)
+			os.Exit(1)
+		}
+		if framed {
+			trans = thrift.NewTFramedTransport(trans)
+		}
+	}
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error creating transport", err)
+		os.Exit(1)
+	}
+	defer trans.Close()
+	var protocolFactory thrift.TProtocolFactory
+	switch protocol {
+	case "compact":
+		protocolFactory = thrift.NewTCompactProtocolFactory()
+		break
+	case "simplejson":
+		protocolFactory = thrift.NewTSimpleJSONProtocolFactory()
+		break
+	case "json":
+		protocolFactory = thrift.NewTJSONProtocolFactory()
+		break
+	case "binary", "":
+		protocolFactory = thrift.NewTBinaryProtocolFactoryDefault()
+		break
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid protocol specified: ", protocol)
+		Usage()
+		os.Exit(1)
+	}
+	iprot := protocolFactory.GetProtocol(trans)
+	oprot := protocolFactory.GetProtocol(trans)
+	client := aurora.NewReadOnlySchedulerClient(thrift.NewTStandardClient(iprot, oprot))
+	if err := trans.Open(); err != nil {
+		fmt.Fprintln(os.Stderr, "Error opening socket to ", host, ":", port, " ", err)
+		os.Exit(1)
+	}
+
+	switch cmd {
+	case "getRoleSummary":
+		if flag.NArg()-1 != 0 {
+			fmt.Fprintln(os.Stderr, "GetRoleSummary requires 0 args")
+			flag.Usage()
+		}
+		fmt.Print(client.GetRoleSummary(context.Background()))
+		fmt.Print("\n")
+		break
+	case "getJobSummary":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobSummary requires 1 args")
+			flag.Usage()
+		}
+		argvalue0 := flag.Arg(1)
+		value0 := argvalue0
+		fmt.Print(client.GetJobSummary(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getTasksStatus":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetTasksStatus requires 1 args")
+			flag.Usage()
+		}
+		arg82 := flag.Arg(1)
+		mbTrans83 := thrift.NewTMemoryBufferLen(len(arg82))
+		defer mbTrans83.Close()
+		_, err84 := mbTrans83.WriteString(arg82)
+		if err84 != nil {
+			Usage()
+			return
+		}
+		factory85 := thrift.NewTJSONProtocolFactory()
+		jsProt86 := factory85.GetProtocol(mbTrans83)
+		argvalue0 := aurora.NewTaskQuery()
+		err87 := argvalue0.Read(jsProt86)
+		if err87 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetTasksStatus(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getTasksWithoutConfigs":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetTasksWithoutConfigs requires 1 args")
+			flag.Usage()
+		}
+		arg88 := flag.Arg(1)
+		mbTrans89 := thrift.NewTMemoryBufferLen(len(arg88))
+		defer mbTrans89.Close()
+		_, err90 := mbTrans89.WriteString(arg88)
+		if err90 != nil {
+			Usage()
+			return
+		}
+		factory91 := thrift.NewTJSONProtocolFactory()
+		jsProt92 := factory91.GetProtocol(mbTrans89)
+		argvalue0 := aurora.NewTaskQuery()
+		err93 := argvalue0.Read(jsProt92)
+		if err93 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetTasksWithoutConfigs(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getPendingReason":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetPendingReason requires 1 args")
+			flag.Usage()
+		}
+		arg94 := flag.Arg(1)
+		mbTrans95 := thrift.NewTMemoryBufferLen(len(arg94))
+		defer mbTrans95.Close()
+		_, err96 := mbTrans95.WriteString(arg94)
+		if err96 != nil {
+			Usage()
+			return
+		}
+		factory97 := thrift.NewTJSONProtocolFactory()
+		jsProt98 := factory97.GetProtocol(mbTrans95)
+		argvalue0 := aurora.NewTaskQuery()
+		err99 := argvalue0.Read(jsProt98)
+		if err99 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetPendingReason(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getConfigSummary":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetConfigSummary requires 1 args")
+			flag.Usage()
+		}
+		arg100 := flag.Arg(1)
+		mbTrans101 := thrift.NewTMemoryBufferLen(len(arg100))
+		defer mbTrans101.Close()
+		_, err102 := mbTrans101.WriteString(arg100)
+		if err102 != nil {
+			Usage()
+			return
+		}
+		factory103 := thrift.NewTJSONProtocolFactory()
+		jsProt104 := factory103.GetProtocol(mbTrans101)
+		argvalue0 := aurora.NewJobKey()
+		err105 := argvalue0.Read(jsProt104)
+		if err105 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetConfigSummary(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getJobs":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobs requires 1 args")
+			flag.Usage()
+		}
+		argvalue0 := flag.Arg(1)
+		value0 := argvalue0
+		fmt.Print(client.GetJobs(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getQuota":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetQuota requires 1 args")
+			flag.Usage()
+		}
+		argvalue0 := flag.Arg(1)
+		value0 := argvalue0
+		fmt.Print(client.GetQuota(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "populateJobConfig":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "PopulateJobConfig requires 1 args")
+			flag.Usage()
+		}
+		arg108 := flag.Arg(1)
+		mbTrans109 := thrift.NewTMemoryBufferLen(len(arg108))
+		defer mbTrans109.Close()
+		_, err110 := mbTrans109.WriteString(arg108)
+		if err110 != nil {
+			Usage()
+			return
+		}
+		factory111 := thrift.NewTJSONProtocolFactory()
+		jsProt112 := factory111.GetProtocol(mbTrans109)
+		argvalue0 := aurora.NewJobConfiguration()
+		err113 := argvalue0.Read(jsProt112)
+		if err113 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.PopulateJobConfig(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getJobUpdateSummaries":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobUpdateSummaries requires 1 args")
+			flag.Usage()
+		}
+		arg114 := flag.Arg(1)
+		mbTrans115 := thrift.NewTMemoryBufferLen(len(arg114))
+		defer mbTrans115.Close()
+		_, err116 := mbTrans115.WriteString(arg114)
+		if err116 != nil {
+			Usage()
+			return
+		}
+		factory117 := thrift.NewTJSONProtocolFactory()
+		jsProt118 := factory117.GetProtocol(mbTrans115)
+		argvalue0 := aurora.NewJobUpdateQuery()
+		err119 := argvalue0.Read(jsProt118)
+		if err119 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetJobUpdateSummaries(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getJobUpdateDetails":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobUpdateDetails requires 1 args")
+			flag.Usage()
+		}
+		arg120 := flag.Arg(1)
+		mbTrans121 := thrift.NewTMemoryBufferLen(len(arg120))
+		defer mbTrans121.Close()
+		_, err122 := mbTrans121.WriteString(arg120)
+		if err122 != nil {
+			Usage()
+			return
+		}
+		factory123 := thrift.NewTJSONProtocolFactory()
+		jsProt124 := factory123.GetProtocol(mbTrans121)
+		argvalue0 := aurora.NewJobUpdateQuery()
+		err125 := argvalue0.Read(jsProt124)
+		if err125 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetJobUpdateDetails(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getJobUpdateDiff":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobUpdateDiff requires 1 args")
+			flag.Usage()
+		}
+		arg126 := flag.Arg(1)
+		mbTrans127 := thrift.NewTMemoryBufferLen(len(arg126))
+		defer mbTrans127.Close()
+		_, err128 := mbTrans127.WriteString(arg126)
+		if err128 != nil {
+			Usage()
+			return
+		}
+		factory129 := thrift.NewTJSONProtocolFactory()
+		jsProt130 := factory129.GetProtocol(mbTrans127)
+		argvalue0 := aurora.NewJobUpdateRequest()
+		err131 := argvalue0.Read(jsProt130)
+		if err131 != nil {
+			Usage()
+			return
+		}
+		value0 := argvalue0
+		fmt.Print(client.GetJobUpdateDiff(context.Background(), value0))
+		fmt.Print("\n")
+		break
+	case "getTierConfigs":
+		if flag.NArg()-1 != 0 {
+			fmt.Fprintln(os.Stderr, "GetTierConfigs requires 0 args")
+			flag.Usage()
+		}
+		fmt.Print(client.GetTierConfigs(context.Background()))
+		fmt.Print("\n")
+		break
+	case "":
+		Usage()
+		break
+	default:
+		fmt.Fprintln(os.Stderr, "Invalid function ", cmd)
+	}
 }
