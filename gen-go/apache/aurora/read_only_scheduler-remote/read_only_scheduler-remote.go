@@ -30,7 +30,7 @@ func Usage() {
 	fmt.Fprintln(os.Stderr, "  Response getQuota(string ownerRole)")
 	fmt.Fprintln(os.Stderr, "  Response populateJobConfig(JobConfiguration description)")
 	fmt.Fprintln(os.Stderr, "  Response getJobUpdateSummaries(JobUpdateQuery jobUpdateQuery)")
-	fmt.Fprintln(os.Stderr, "  Response getJobUpdateDetails(JobUpdateQuery query)")
+	fmt.Fprintln(os.Stderr, "  Response getJobUpdateDetails(JobUpdateKey key, JobUpdateQuery query)")
 	fmt.Fprintln(os.Stderr, "  Response getJobUpdateDiff(JobUpdateRequest request)")
 	fmt.Fprintln(os.Stderr, "  Response getTierConfigs()")
 	fmt.Fprintln(os.Stderr)
@@ -316,8 +316,8 @@ func main() {
 		fmt.Print("\n")
 		break
 	case "getJobUpdateDetails":
-		if flag.NArg()-1 != 1 {
-			fmt.Fprintln(os.Stderr, "GetJobUpdateDetails requires 1 args")
+		if flag.NArg()-1 != 2 {
+			fmt.Fprintln(os.Stderr, "GetJobUpdateDetails requires 2 args")
 			flag.Usage()
 		}
 		arg121 := flag.Arg(1)
@@ -330,22 +330,14 @@ func main() {
 		}
 		factory124 := thrift.NewTSimpleJSONProtocolFactory()
 		jsProt125 := factory124.GetProtocol(mbTrans122)
-		argvalue0 := aurora.NewJobUpdateQuery()
+		argvalue0 := aurora.NewJobUpdateKey()
 		err126 := argvalue0.Read(jsProt125)
 		if err126 != nil {
 			Usage()
 			return
 		}
 		value0 := argvalue0
-		fmt.Print(client.GetJobUpdateDetails(value0))
-		fmt.Print("\n")
-		break
-	case "getJobUpdateDiff":
-		if flag.NArg()-1 != 1 {
-			fmt.Fprintln(os.Stderr, "GetJobUpdateDiff requires 1 args")
-			flag.Usage()
-		}
-		arg127 := flag.Arg(1)
+		arg127 := flag.Arg(2)
 		mbTrans128 := thrift.NewTMemoryBufferLen(len(arg127))
 		defer mbTrans128.Close()
 		_, err129 := mbTrans128.WriteString(arg127)
@@ -355,9 +347,34 @@ func main() {
 		}
 		factory130 := thrift.NewTSimpleJSONProtocolFactory()
 		jsProt131 := factory130.GetProtocol(mbTrans128)
-		argvalue0 := aurora.NewJobUpdateRequest()
-		err132 := argvalue0.Read(jsProt131)
+		argvalue1 := aurora.NewJobUpdateQuery()
+		err132 := argvalue1.Read(jsProt131)
 		if err132 != nil {
+			Usage()
+			return
+		}
+		value1 := argvalue1
+		fmt.Print(client.GetJobUpdateDetails(value0, value1))
+		fmt.Print("\n")
+		break
+	case "getJobUpdateDiff":
+		if flag.NArg()-1 != 1 {
+			fmt.Fprintln(os.Stderr, "GetJobUpdateDiff requires 1 args")
+			flag.Usage()
+		}
+		arg133 := flag.Arg(1)
+		mbTrans134 := thrift.NewTMemoryBufferLen(len(arg133))
+		defer mbTrans134.Close()
+		_, err135 := mbTrans134.WriteString(arg133)
+		if err135 != nil {
+			Usage()
+			return
+		}
+		factory136 := thrift.NewTSimpleJSONProtocolFactory()
+		jsProt137 := factory136.GetProtocol(mbTrans134)
+		argvalue0 := aurora.NewJobUpdateRequest()
+		err138 := argvalue0.Read(jsProt137)
+		if err138 != nil {
 			Usage()
 			return
 		}

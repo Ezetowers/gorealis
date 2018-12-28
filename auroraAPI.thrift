@@ -950,22 +950,22 @@ struct JobUpdateRequest {
  */
 struct JobUpdateQuery {
   /** Job role. */
-  2: optional string role
+  2: string role
 
   /** Unique identifier for a job update. */
-  8: optional JobUpdateKey key
+  8: JobUpdateKey key
 
   /** Job key. */
-  3: optional JobKey jobKey
+  3: JobKey jobKey
 
   /** User who created the update. */
-  4: optional string user
+  4: string user
 
   /** Set of update statuses. */
-  5: optional set<JobUpdateStatus> updateStatuses
+  5: set<JobUpdateStatus> updateStatuses
 
   /** Offset to serve data from. Used by pagination. */
-  6: optional i32 offset
+  6: i32 offset
 
   /** Number or records to serve. Used by pagination. */
   7: i32 limit
@@ -1162,7 +1162,8 @@ service ReadOnlyScheduler {
   Response getJobUpdateSummaries(1: JobUpdateQuery jobUpdateQuery)
 
   /** Gets job update details. */
-  Response getJobUpdateDetails(2: JobUpdateQuery query)
+  // TODO(zmanji): `key` is deprecated, remove this with AURORA-1765
+  Response getJobUpdateDetails(1: JobUpdateKey key, 2: JobUpdateQuery query)
 
   /** Gets the diff between client (desired) and server (current) job states. */
   Response getJobUpdateDiff(1: JobUpdateRequest request)
